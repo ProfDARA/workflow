@@ -13,6 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       MLFLOW_TRACKING_URI: file:${{ github.workspace }}/mlruns-ci
+      MLFLOW_EXPERIMENT_NAME: MLProject_CI
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -37,12 +38,28 @@ jobs:
           rm -rf "${{ github.workspace }}/mlruns-ci"
           mkdir -p "${{ github.workspace }}/mlruns-ci"
 
+      - name: Initialize MLflow experiments
+        shell: bash -l {0}
+        run: |
+          conda run -n mlproject-env python - <<'PY'
+          import mlflow
+          from mlflow.tracking import MlflowClient
+
+          mlflow.set_tracking_uri("file:${{ github.workspace }}/mlruns-ci")
+          client = MlflowClient()
+
+          if client.get_experiment_by_name("MLProject_CI") is None:
+              client.create_experiment("MLProject_CI")
+
+          print("MLflow experiment store initialized")
+          PY
+
       - name: Run MLflow Project
         shell: bash -l {0}
         working-directory: ./MLProject
         run: |
           echo "Running MLflow project"
-          conda run -n mlproject-env mlflow run . --env-manager local -P data=namadataset_preprocessing/daily_sales_forecasting.csv -P output=artifacts
+          conda run -n mlproject-env mlflow run . --env-manager local --experiment-name MLProject_CI -P data=namadataset_preprocessing/daily_sales_forecasting.csv -P output=artifacts
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
