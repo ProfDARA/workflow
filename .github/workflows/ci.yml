@@ -11,6 +11,8 @@ on:
 jobs:
   run-mlproject:
     runs-on: ubuntu-latest
+    env:
+      MLFLOW_TRACKING_URI: file:${{ github.workspace }}/mlruns-ci
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -28,6 +30,12 @@ jobs:
         run: |
           conda run -n mlproject-env python -m pip install "setuptools==68.2.2" "packaging==23.2" "wheel==0.41.2"
           conda run -n mlproject-env python -c "import pkg_resources; print('pkg_resources ok')"
+
+      - name: Prepare clean MLflow tracking directory
+        shell: bash -l {0}
+        run: |
+          rm -rf "${{ github.workspace }}/mlruns-ci"
+          mkdir -p "${{ github.workspace }}/mlruns-ci"
 
       - name: Run MLflow Project
         shell: bash -l {0}
@@ -71,8 +79,6 @@ jobs:
       - name: Build and push Docker image with MLflow
         shell: bash -l {0}
         working-directory: ./MLProject
-        env:
-          MLFLOW_TRACKING_URI: file:${{ github.workspace }}/MLProject/mlruns
         run: |
           IMAGE_NAME="${{ secrets.DOCKERHUB_USERNAME }}/mlproject-model:${{ github.run_number }}"
           conda run -n mlproject-env mlflow models build-docker -m "runs:/${RUN_ID}/model" -n "$IMAGE_NAME"

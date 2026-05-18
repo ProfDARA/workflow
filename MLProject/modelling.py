@@ -60,7 +60,8 @@ def main():
 
     X_train, X_val, X_test, y_train, y_val, y_test = load_preprocessed_data(args.data)
 
-    Path(args.output).mkdir(parents=True, exist_ok=True)
+    output_dir = Path(args.output)
+    output_dir.mkdir(parents=True, exist_ok=True)
 
     mlflow.set_experiment('MLProject_CI')
 
@@ -72,7 +73,7 @@ def main():
         metrics = evaluate_regression(y_test, y_test_pred)
         mlflow.log_metrics(metrics)
 
-        model_path = Path(args.output) / 'rf_model.pkl'
+        model_path = output_dir / 'rf_model.pkl'
         with open(model_path, 'wb') as f:
             pickle.dump(model, f)
         mlflow.log_artifact(str(model_path))
@@ -81,18 +82,11 @@ def main():
         sample = X_test.head(50).copy()
         sample['y_true'] = y_test.reset_index(drop=True).head(50)
         sample['y_pred'] = y_test_pred[:50]
-        sample_path = Path(args.output) / 'predictions_sample.csv'
+        sample_path = output_dir / 'predictions_sample.csv'
         sample.to_csv(sample_path, index=False)
         mlflow.log_artifact(str(sample_path))
 
-    # If mlflow run already active (invoked via `mlflow run`), do not start a new run
-    import os as _os
-    # Only start a new run if there is no active run and MLflow didn't set a run id in the environment
-    if mlflow.active_run() is None and _os.environ.get('MLFLOW_RUN_ID') is None:
-        with mlflow.start_run(run_name='mlproject_basic'):
-            _run_training()
-    else:
-        _run_training()
+    _run_training()
 
     print('MLProject run complete. Artifacts saved to', args.output)
 
