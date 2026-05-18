@@ -1,0 +1,9 @@
+name: Workflow-CI-MLProject
+conda_env: conda.yaml
+
+entry_points:
+  main:
+    parameters:
+      data: {type: str, default: "daily_sales_forecasting/daily_sales_forecasting.csv"}
+      output: {type: str, default: "artifacts"}
+    command: "python modelling.py --data {data} --output {output}"

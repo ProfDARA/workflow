@@ -1,0 +1,93 @@
+name: MLProject CI
+
+permissions:
+  contents: write
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch: {}
+
+jobs:
+  run-mlproject:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Miniconda
+        uses: conda-incubator/setup-miniconda@v2
+        with:
+          python-version: 3.10
+          activate-environment: mlproject-env
+          environment-file: Workflow-CI/MLProject/conda.yaml
+          auto-activate-base: false
+
+      - name: Run MLflow Project
+        shell: bash -l {0}
+        working-directory: ./Workflow-CI/MLProject
+        run: |
+          echo "Running MLflow project"
+          mlflow run . --env-manager local -P data=namadataset_preprocessing/daily_sales_forecasting.csv -P output=artifacts
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: mlproject-artifacts
+          path: Workflow-CI/MLProject/artifacts
+
+      - name: Get latest MLflow run id
+        id: mlflow_run
+        shell: bash -l {0}
+        working-directory: ./Workflow-CI/MLProject
+        run: |
+          RUN_ID=$(python - <<'PY'
+          import mlflow
+          from mlflow.tracking import MlflowClient
+          exp = mlflow.get_experiment_by_name("MLProject_CI")
+          if exp is None:
+              raise SystemExit("Experiment 'MLProject_CI' not found")
+          runs = MlflowClient().search_runs(exp.experiment_id, order_by=["start_time DESC"], max_results=1)
+          if not runs:
+              raise SystemExit("No MLflow runs found")
+          print(runs[0].info.run_id)
+          PY
+          )
+          echo "RUN_ID=$RUN_ID" >> $GITHUB_ENV
+          echo "run_id=$RUN_ID" >> $GITHUB_OUTPUT
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and push Docker image with MLflow
+        shell: bash -l {0}
+        working-directory: ./Workflow-CI/MLProject
+        env:
+          MLFLOW_TRACKING_URI: file:${{ github.workspace }}/Workflow-CI/MLProject/mlruns
+        run: |
+          IMAGE_NAME="${{ secrets.DOCKERHUB_USERNAME }}/mlproject-model:${{ github.run_number }}"
+          mlflow models build-docker -m "runs:/${RUN_ID}/model" -n "$IMAGE_NAME"
+          docker push "$IMAGE_NAME"
+
+      - name: Commit artifacts to repository
+        if: always()
+        run: |
+          set -e
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          mkdir -p ci_artifacts/mlproject
+          # copy artifacts into repository folder
+          if [ -d "Workflow-CI/MLProject/artifacts" ]; then
+            cp -r Workflow-CI/MLProject/artifacts/* ci_artifacts/mlproject/ || true
+          fi
+          git add ci_artifacts/mlproject || true
+          if git diff --staged --quiet; then
+            echo "No artifact changes to commit"
+          else
+            git commit -m "CI: add MLProject artifacts $GITHUB_RUN_ID"
+            git push
+          fi
+

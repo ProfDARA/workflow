@@ -1,0 +1,2 @@
+Docker Hub placeholder. When ready to publish Docker image using `mlflow models build-docker`, put your Docker repo here.
+Example: docker.io/yourusername/membangun_model:latest
