@@ -23,10 +23,10 @@ jobs:
           environment-file: MLProject/conda.yaml
           auto-activate-base: false
 
-      - name: Ensure setuptools is installed
+      - name: Ensure MLflow-compatible packaging stack
         shell: bash -l {0}
         run: |
-          conda run -n mlproject-env python -m pip install --upgrade setuptools wheel
+          conda run -n mlproject-env python -m pip install "setuptools==68.2.2" "packaging==23.2" "wheel==0.41.2"
           conda run -n mlproject-env python -c "import pkg_resources; print('pkg_resources ok')"
 
       - name: Run MLflow Project
