@@ -67,28 +67,42 @@ def main():
 
     def _run_training():
         mlflow.sklearn.autolog()
-        model = RandomForestRegressor(n_estimators=50, random_state=42)
+
+        model = RandomForestRegressor(
+            n_estimators=50,
+            random_state=42,
+        )
+
         model.fit(X_train, y_train)
+
         y_test_pred = model.predict(X_test)
+
         metrics = evaluate_regression(y_test, y_test_pred)
+
         mlflow.log_metrics(metrics)
 
-        model_path = output_dir / 'rf_model.pkl'
-        with open(model_path, 'wb') as f:
+        # Save sklearn model in MLflow format
+        mlflow.sklearn.log_model(model, "model")
+
+        # Optional local pickle artifact
+        model_path = output_dir / "rf_model.pkl"
+
+        with open(model_path, "wb") as f:
             pickle.dump(model, f)
+
         mlflow.log_artifact(str(model_path))
 
-        # save a small sample predictions CSV as additional artifact
+        # Sample predictions artifact
         sample = X_test.head(50).copy()
-        sample['y_true'] = y_test.reset_index(drop=True).head(50)
-        sample['y_pred'] = y_test_pred[:50]
-        sample_path = output_dir / 'predictions_sample.csv'
+
+        sample["y_true"] = y_test.reset_index(drop=True).head(50)
+        sample["y_pred"] = y_test_pred[:50]
+
+        sample_path = output_dir / "predictions_sample.csv"
+
         sample.to_csv(sample_path, index=False)
+
         mlflow.log_artifact(str(sample_path))
-
-    _run_training()
-
-    print('MLProject run complete. Artifacts saved to', args.output)
 
 
 if __name__ == '__main__':
