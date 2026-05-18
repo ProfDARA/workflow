@@ -26,15 +26,15 @@ jobs:
       - name: Ensure setuptools is installed
         shell: bash -l {0}
         run: |
-          conda install -y setuptools
-          python -m pip install --upgrade setuptools wheel
+          conda run -n mlproject-env python -m pip install --upgrade setuptools wheel
+          conda run -n mlproject-env python -c "import pkg_resources; print('pkg_resources ok')"
 
       - name: Run MLflow Project
         shell: bash -l {0}
         working-directory: ./MLProject
         run: |
           echo "Running MLflow project"
-          mlflow run . --env-manager local -P data=namadataset_preprocessing/daily_sales_forecasting.csv -P output=artifacts
+          conda run -n mlproject-env mlflow run . --env-manager local -P data=namadataset_preprocessing/daily_sales_forecasting.csv -P output=artifacts
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
@@ -47,7 +47,7 @@ jobs:
         shell: bash -l {0}
         working-directory: ./MLProject
         run: |
-          RUN_ID=$(python - <<'PY'
+          RUN_ID=$(conda run -n mlproject-env python - <<'PY'
           import mlflow
           from mlflow.tracking import MlflowClient
           exp = mlflow.get_experiment_by_name("MLProject_CI")
@@ -75,7 +75,7 @@ jobs:
           MLFLOW_TRACKING_URI: file:${{ github.workspace }}/MLProject/mlruns
         run: |
           IMAGE_NAME="${{ secrets.DOCKERHUB_USERNAME }}/mlproject-model:${{ github.run_number }}"
-          mlflow models build-docker -m "runs:/${RUN_ID}/model" -n "$IMAGE_NAME"
+          conda run -n mlproject-env mlflow models build-docker -m "runs:/${RUN_ID}/model" -n "$IMAGE_NAME"
           docker push "$IMAGE_NAME"
 
       - name: Commit artifacts to repository
