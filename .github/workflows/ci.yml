@@ -14,11 +14,16 @@ jobs:
     env:
       MLFLOW_TRACKING_URI: file:${{ github.workspace }}/mlruns-ci
       MLFLOW_EXPERIMENT_NAME: MLProject_CI
+      DOCKER_HOST: unix:///var/run/docker.sock
+      DOCKER_TLS_VERIFY: ""
+      DOCKER_CERT_PATH: ""
+      LOCAL_IMAGE_NAME: mlproject-model:${{ github.run_number }}
+      IMAGE_NAME: ${{ secrets.DOCKERHUB_USERNAME }}/mlproject-model:${{ github.run_number }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - name: Run actions/checkout@v3
+        uses: actions/checkout@v3
 
-      - name: Setup Miniconda
+      - name: Set up Python 3.10 (Miniconda)
         uses: conda-incubator/setup-miniconda@v2
         with:
           python-version: "3.10"
@@ -26,21 +31,25 @@ jobs:
           environment-file: MLProject/conda.yaml
           auto-activate-base: false
 
-      - name: Ensure MLflow-compatible packaging stack
+      - name: Check Env
+        shell: bash -l {0}
+        run: |
+          conda run -n mlproject-env python --version
+          conda run -n mlproject-env python -c "import sys; print(sys.executable)"
+
+      - name: Install dependencies
         shell: bash -l {0}
         run: |
           conda run -n mlproject-env python -m pip install "setuptools==68.2.2" "packaging==23.2" "wheel==0.41.2"
           conda run -n mlproject-env python -c "import pkg_resources; print('pkg_resources ok')"
 
-      - name: Prepare clean MLflow tracking directory
+      - name: Run mlflow project
         shell: bash -l {0}
+        working-directory: ./MLProject
         run: |
+          echo "Running MLflow project"
           rm -rf "${{ github.workspace }}/mlruns-ci"
           mkdir -p "${{ github.workspace }}/mlruns-ci"
-
-      - name: Initialize MLflow experiments
-        shell: bash -l {0}
-        run: |
           conda run -n mlproject-env python - <<'PY'
           import mlflow
           from mlflow.tracking import MlflowClient
@@ -53,19 +62,7 @@ jobs:
 
           print("MLflow experiment store initialized")
           PY
-
-      - name: Run MLflow Project
-        shell: bash -l {0}
-        working-directory: ./MLProject
-        run: |
-          echo "Running MLflow project"
           conda run -n mlproject-env mlflow run . --env-manager local --experiment-name MLProject_CI -P data=namadataset_preprocessing/daily_sales_forecasting.csv -P output=artifacts
-
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: mlproject-artifacts
-          path: MLProject/artifacts
 
       - name: Get latest MLflow run id
         id: mlflow_run
@@ -93,34 +90,42 @@ jobs:
           echo "RUN_ID=$RUN_ID" >> $GITHUB_ENV
           echo "run_id=$RUN_ID" >> $GITHUB_OUTPUT
 
-      - name: Login to Docker Hub
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-
-      - name: Normalize Docker client configuration
+      - name: Install Python dependencies
         shell: bash -l {0}
         run: |
-          export DOCKER_HOST=unix:///var/run/docker.sock
-          unset DOCKER_TLS_VERIFY
-          unset DOCKER_CERT_PATH
-          docker version
+          conda run -n mlproject-env python -m pip install "docker==6.1.3" "requests==2.31.0" "urllib3==1.26.18"
 
-      - name: Build and push Docker image with MLflow
+      - name: Upload to Google Drive
+        uses: actions/upload-artifact@v4
+        with:
+          name: mlproject-artifacts
+          path: MLProject/artifacts
+
+      - name: Build Docker Model
         shell: bash -l {0}
         working-directory: ./MLProject
         run: |
-          export DOCKER_HOST=unix:///var/run/docker.sock
-          unset DOCKER_TLS_VERIFY
-          unset DOCKER_CERT_PATH
           RUN_ID="${{ steps.mlflow_run.outputs.run_id }}"
           if [ -z "$RUN_ID" ]; then
             echo "Missing MLflow run id" >&2
             exit 1
           fi
-          IMAGE_NAME="${{ secrets.DOCKERHUB_USERNAME }}/mlproject-model:${{ github.run_number }}"
-          conda run -n mlproject-env mlflow models build-docker -m "runs:/${RUN_ID}/model" -n "$IMAGE_NAME" --install-java false
+          conda run -n mlproject-env mlflow models build-docker -m "runs:/${RUN_ID}/model" -n "$LOCAL_IMAGE_NAME" --install-java false
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Tag Docker Image
+        shell: bash -l {0}
+        run: |
+          docker tag "$LOCAL_IMAGE_NAME" "$IMAGE_NAME"
+
+      - name: Push Docker Image
+        shell: bash -l {0}
+        run: |
           docker push "$IMAGE_NAME"
 
       - name: Commit artifacts to repository
