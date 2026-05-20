@@ -72,18 +72,20 @@ jobs:
         shell: bash -l {0}
         working-directory: ./MLProject
         run: |
-          RUN_ID=$(conda run -n mlproject-env python - <<'PY' | tail -n 1 | tr -d '\r')
+          RUN_ID=$(conda run -n mlproject-env python -c '
           import mlflow
           from mlflow.tracking import MlflowClient
+
           exp = mlflow.get_experiment_by_name("MLProject_CI")
           if exp is None:
-              raise SystemExit("Experiment 'MLProject_CI' not found")
+            raise SystemExit("Experiment \"MLProject_CI\" not found")
+
           runs = MlflowClient().search_runs(exp.experiment_id, order_by=["start_time DESC"], max_results=1)
           if not runs:
-              raise SystemExit("No MLflow runs found")
+            raise SystemExit("No MLflow runs found")
+
           print(runs[0].info.run_id)
-          PY
-          )
+          ' | tail -n 1 | tr -d '\r')
           if [ -z "$RUN_ID" ]; then
             echo "Failed to resolve MLflow run id" >&2
             exit 1
