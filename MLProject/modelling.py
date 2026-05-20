@@ -63,8 +63,6 @@ def main():
     output_dir = Path(args.output)
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    mlflow.set_experiment('MLProject_CI')
-
     def _run_training():
         mlflow.sklearn.autolog()
 
