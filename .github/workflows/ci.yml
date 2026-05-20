@@ -120,7 +120,7 @@ jobs:
             exit 1
           fi
           IMAGE_NAME="${{ secrets.DOCKERHUB_USERNAME }}/mlproject-model:${{ github.run_number }}"
-          conda run -n mlproject-env mlflow models build-docker -m "runs:/${RUN_ID}/model" -n "$IMAGE_NAME"
+          conda run -n mlproject-env mlflow models build-docker -m "runs:/${RUN_ID}/model" -n "$IMAGE_NAME" --install-java false
           docker push "$IMAGE_NAME"
 
       - name: Commit artifacts to repository
