@@ -4,6 +4,10 @@ conda_env: conda.yaml
 entry_points:
   main:
     parameters:
-      data: {type: str, default: "daily_sales_forecasting/daily_sales_forecasting.csv"}
+      data: {type: str, default: "namadataset_preprocessing/daily_sales_forecasting.csv"}
       output: {type: str, default: "artifacts"}
-    command: "python modelling.py --data {data} --output {output}"
+      group_col: {type: str, default: "Category"}
+      group_value: {type: str, default: ""}
+      target_col: {type: str, default: "Qty"}
+      min_group_size: {type: int, default: 30}
+    command: "python modelling.py --data {data} --output {output} --group-col {group_col} --group-value {group_value} --target-col {target_col} --min-group-size {min_group_size}"

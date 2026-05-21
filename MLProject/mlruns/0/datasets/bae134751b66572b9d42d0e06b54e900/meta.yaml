@@ -1,0 +1,14 @@
+digest: 7e022437
+name: dataset
+profile: '{"num_rows": 9, "num_elements": 90}'
+schema: '{"mlflow_colspec": [{"type": "double", "name": "lag_1", "required": true},
+  {"type": "double", "name": "lag_7", "required": true}, {"type": "double", "name":
+  "rolling_mean_7", "required": true}, {"type": "double", "name": "rolling_std_7",
+  "required": true}, {"type": "integer", "name": "day", "required": true}, {"type":
+  "integer", "name": "month", "required": true}, {"type": "integer", "name": "year",
+  "required": true}, {"type": "integer", "name": "weekday", "required": true}, {"type":
+  "long", "name": "weekofyear", "required": true}, {"type": "long", "name": "is_weekend",
+  "required": true}]}'
+source: '{"tags": {"mlflow.user": "Danang ARA", "mlflow.source.name": "modelling.py",
+  "mlflow.source.type": "LOCAL", "mlflow.source.git.commit": "b741aea27d3c80263c1077e5bb935e2587d04147"}}'
+source_type: code
