@@ -161,6 +161,8 @@ def main():
     parser.add_argument('--min-group-size', type=int, default=30)
     args = parser.parse_args()
 
+    requested_group_col = args.group_col
+    requested_target_col = args.target_col
     group_value = args.group_value.strip() if args.group_value else None
     X_train, X_val, X_test, y_train, y_val, y_test, meta = load_demand_data(
         args.data,
@@ -177,10 +179,12 @@ def main():
         mlflow.sklearn.autolog()
 
         mlflow.log_params({
-            'group_col': meta.get('group_col'),
-            'group_value': meta.get('group_value'),
-            'target_name': meta.get('target_name'),
-            'n_groups': meta.get('n_groups')
+            'resolved_group_col': meta.get('group_col'),
+            'resolved_group_value': meta.get('group_value'),
+            'resolved_target_name': meta.get('target_name'),
+            'n_groups': meta.get('n_groups'),
+            'requested_group_col': requested_group_col,
+            'requested_target_col': requested_target_col,
         })
 
         model = RandomForestRegressor(

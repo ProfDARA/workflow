@@ -1,2 +1,2 @@
 CI workflow notes for MLProject.
-Workflow triggers MLflow Project run and uploads artifacts.
+Workflow triggers MLflow Project run (demand forecasting) and uploads artifacts.

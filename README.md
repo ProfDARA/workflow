@@ -1,11 +1,11 @@
 # Workflow-CI
 
-Repository ini berisi implementasi **MLflow Project + GitHub Actions CI** untuk melakukan re-training model secara otomatis ketika workflow dipicu.
+Repository ini berisi implementasi **MLflow Project + GitHub Actions CI** untuk melakukan re-training model demand forecasting secara otomatis ketika workflow dipicu.
 
 ## Apa isi repo ini
 
 - `MLProject/` berisi project MLflow utama.
-- `MLProject/modelling.py` adalah script training model.
+- `MLProject/modelling.py` adalah script training demand forecasting per group (Category/ship-state/SKU).
 - `MLProject/conda.yaml` adalah environment dependency untuk training.
 - `MLProject/MLproject` adalah definisi entry point MLflow.
 - `MLProject/namadataset_preprocessing/` berisi dataset input yang dipakai saat training.
@@ -17,7 +17,7 @@ Repository ini berisi implementasi **MLflow Project + GitHub Actions CI** untuk 
 Saat ada `push` ke branch `main` atau workflow dijalankan manual, GitHub Actions akan:
 
 1. Menyiapkan environment conda dari `MLProject/conda.yaml`.
-2. Menjalankan `mlflow run` pada folder `MLProject`.
+2. Menjalankan `mlflow run` pada folder `MLProject` (demand forecasting).
 3. Menyimpan artifact hasil training.
 4. Mengambil run MLflow terbaru.
 5. Membuat Docker image dari model dengan `mlflow models build-docker`.
@@ -43,7 +43,10 @@ conda activate mlproject-env
 ### 3. Jalankan training manual
 
 ```bash
-mlflow run . --env-manager local -P data=namadataset_preprocessing/daily_sales_forecasting.csv -P output=artifacts
+mlflow run . --env-manager local -P data=namadataset_preprocessing/daily_sales_forecasting.csv -P output=artifacts -P target_col=Daily_Revenue
+
+# Contoh demand forecasting per Category
+mlflow run . --env-manager local -P data=cleaned_amazon_sales.csv -P output=artifacts -P group_col=Category -P group_value=Kurta -P target_col=Qty
 ```
 
 Hasil training akan tersimpan di folder `artifacts/` dan terlog ke MLflow run lokal.
