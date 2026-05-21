@@ -1,0 +1,22 @@
+artifact_path: file:///E:/RestuAjiIndustries/PORTOFOLIO%20MLOPS/Workflow-CI/MLProject/mlruns/0/models/m-7f0feac00fa14257b17058adf0bf11c9/artifacts
+flavors:
+  python_function:
+    env:
+      conda: conda.yaml
+      virtualenv: python_env.yaml
+    loader_module: mlflow.sklearn
+    model_path: model.pkl
+    predict_fn: predict
+    python_version: 3.13.1
+  sklearn:
+    code: null
+    pickled_model: model.pkl
+    serialization_format: cloudpickle
+    sklearn_version: 1.6.1
+mlflow_version: 3.6.0
+model_id: m-7f0feac00fa14257b17058adf0bf11c9
+model_size_bytes: 295135
+model_uuid: m-7f0feac00fa14257b17058adf0bf11c9
+prompts: null
+run_id: 1e4857384db34297bfc3d30ee01cc47f
+utc_time_created: '2026-05-21 14:30:51.098111'

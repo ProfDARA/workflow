@@ -1,7 +1,7 @@
 """
 MLProject-compatible modelling script for CI (Demand Forecasting)
 Usage:
-    python modelling.py --data namadataset_preprocessing/daily_sales_forecasting.csv --output artifacts
+    python modelling.py --data auto --output artifacts
     python modelling.py --data cleaned_amazon_sales.csv --group-col Category --group-value Kurta
 """
 
@@ -11,9 +11,85 @@ import pandas as pd
 import numpy as np
 import pickle
 import mlflow
-import mlflow.sklearn
+from mlflow import sklearn as mlflow_sklearn
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
+
+
+DEFAULT_DATASET_CANDIDATES = [
+    'MLProject/amazon_preprocessing/daily_demand_forecasting.csv',
+    'MLProject/amazon_preprocessing/daily_demand_by_sku.csv',
+    'MLProject/amazon_preprocessing/daily_demand_by_state.csv',
+    'MLProject/amazon_preprocessing/cleaned_amazon_sales.csv',
+    'amazon_preprocessing/daily_demand_forecasting.csv',
+    'amazon_preprocessing/daily_demand_by_sku.csv',
+    'amazon_preprocessing/daily_demand_by_state.csv',
+    'amazon_preprocessing/cleaned_amazon_sales.csv',
+]
+
+
+def _resolve_csv_path(csv_path: str, preferred_group_col: str | None = None) -> Path:
+    repo_root = Path(__file__).resolve().parents[1]
+
+    def _resolve(value: str) -> Path:
+        candidate = Path(value)
+        return candidate if candidate.is_absolute() else (repo_root / candidate)
+
+    if not csv_path or str(csv_path).strip().lower() in {'auto', 'default', 'any'}:
+        search_paths = DEFAULT_DATASET_CANDIDATES
+    else:
+        search_paths = [csv_path] + DEFAULT_DATASET_CANDIDATES
+
+    explicit = _resolve(csv_path) if csv_path else None
+    if explicit is not None:
+        if explicit.exists() and explicit.is_file():
+            return explicit
+        if explicit.exists() and explicit.is_dir():
+            for file_name in [
+                'daily_demand_forecasting.csv',
+                'daily_demand_by_sku.csv',
+                'daily_demand_by_state.csv',
+                'cleaned_amazon_sales.csv',
+            ]:
+                candidate = explicit / file_name
+                if candidate.exists():
+                    return candidate
+
+    preferred_group_col = (preferred_group_col or '').strip()
+    preferred_group_col = preferred_group_col or None
+
+    def _header_columns(candidate: Path) -> list[str]:
+        try:
+            header = pd.read_csv(candidate, nrows=0)
+        except Exception:
+            return []
+        return [column.strip() for column in header.columns]
+
+    date_candidates: list[Path] = []
+    group_candidates: list[Path] = []
+
+    for value in search_paths:
+        candidate = _resolve(value)
+        if not candidate.exists() or not candidate.is_file():
+            continue
+
+        columns = _header_columns(candidate)
+        if 'Date' not in columns:
+            continue
+
+        date_candidates.append(candidate)
+        if preferred_group_col and preferred_group_col in columns:
+            group_candidates.append(candidate)
+
+    if group_candidates:
+        return group_candidates[0]
+
+    if date_candidates:
+        return date_candidates[0]
+
+    raise FileNotFoundError(
+        'Sales CSV not found. Expected one of the configured daily-demand datasets.'
+    )
 
 
 def load_demand_data(
@@ -23,9 +99,7 @@ def load_demand_data(
     target_col: str,
     min_group_size: int
 ):
-    p = Path(path)
-    if not p.exists():
-        raise FileNotFoundError(f"Preprocessed CSV not found at {p}")
+    p = _resolve_csv_path(path, preferred_group_col=group_col)
 
     df = pd.read_csv(p)
     df.columns = [c.strip() for c in df.columns]
@@ -34,11 +108,17 @@ def load_demand_data(
         raise ValueError("CSV must contain Date column")
 
     if target_col not in df.columns:
-        if 'Daily_Revenue' in df.columns:
+        if 'Daily_Demand' in df.columns:
+            print(f"Target column '{target_col}' not found. Using Daily_Demand as target.")
+            target_col = 'Daily_Demand'
+        elif 'Daily_Revenue' in df.columns:
             print(f"Target column '{target_col}' not found. Using Daily_Revenue as proxy target.")
             target_col = 'Daily_Revenue'
+        elif 'Qty' in df.columns:
+            print(f"Target column '{target_col}' not found. Using Qty as target.")
+            target_col = 'Qty'
         else:
-            raise ValueError(f"CSV must contain target column '{target_col}' or Daily_Revenue")
+            raise ValueError(f"CSV must contain target column '{target_col}', Daily_Demand, Qty, or Daily_Revenue")
 
     group_col = (group_col or '').strip()
     if group_col.lower() in ('', 'none', 'all', 'global'):
@@ -65,9 +145,8 @@ def load_demand_data(
         df = df[group_norm == target_norm]
 
     daily = (
-        df.groupby(['Date', group_col], as_index=False)[target_col]
-        .sum()
-        .rename(columns={target_col: 'Daily_Demand'})
+        df.groupby(['Date', group_col], as_index=False)
+        .agg(Daily_Demand=(target_col, 'sum'))
     )
 
     if not group_value and daily[group_col].nunique() > 1 and min_group_size > 1:
@@ -78,7 +157,7 @@ def load_demand_data(
     if daily.empty:
         raise ValueError("No rows available after aggregation. Check group filters or min_group_size.")
 
-    daily = daily.sort_values([group_col, 'Date'])
+    daily = daily.sort_values(by=[group_col, 'Date'])
     daily['lag_1'] = daily.groupby(group_col)['Daily_Demand'].shift(1)
     daily['lag_7'] = daily.groupby(group_col)['Daily_Demand'].shift(7)
     daily['rolling_mean_7'] = daily.groupby(group_col)['Daily_Demand'].transform(
@@ -153,7 +232,7 @@ def evaluate_regression(y_true, y_pred):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--data', default='namadataset_preprocessing/daily_sales_forecasting.csv')
+    parser.add_argument('--data', default='auto')
     parser.add_argument('--output', default='artifacts')
     parser.add_argument('--group-col', default='Category')
     parser.add_argument('--group-value', default='')
@@ -176,7 +255,7 @@ def main():
     output_dir.mkdir(parents=True, exist_ok=True)
 
     def _run_training():
-        mlflow.sklearn.autolog()
+        mlflow_sklearn.autolog()
 
         mlflow.log_params({
             'resolved_group_col': meta.get('group_col'),
@@ -201,7 +280,7 @@ def main():
         mlflow.log_metrics(metrics)
 
         # Save sklearn model in MLflow format
-        mlflow.sklearn.log_model(model, "model")
+        mlflow_sklearn.log_model(model, "model")
 
         # Optional local pickle artifact
         model_path = output_dir / "rf_model.pkl"

@@ -4,7 +4,7 @@ conda_env: conda.yaml
 entry_points:
   main:
     parameters:
-      data: {type: str, default: "namadataset_preprocessing/daily_sales_forecasting.csv"}
+      data: {type: str, default: "auto"}
       output: {type: str, default: "artifacts"}
       group_col: {type: str, default: "Category"}
       group_value: {type: str, default: ""}

@@ -1,0 +1,10 @@
+artifact_location: file:///E:/RestuAjiIndustries/PORTOFOLIO%20MLOPS/Workflow-CI/MLProject/mlruns/0/models/m-60397bdd54a44b47b84613b73b7f102f/artifacts
+creation_timestamp: 1779373895828
+experiment_id: '0'
+last_updated_timestamp: 1779373900220
+model_id: m-60397bdd54a44b47b84613b73b7f102f
+model_type: null
+name: model
+source_run_id: 9cd14a04cc484b4f9d1463d67ca39c4c
+status: 2
+status_message: null

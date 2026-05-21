@@ -1,0 +1,35 @@
+artifact_path: file:///E:/RestuAjiIndustries/PORTOFOLIO%20MLOPS/Workflow-CI/MLProject/mlruns/0/models/m-7141da981ec34f009930e67949345b9c/artifacts
+flavors:
+  python_function:
+    env:
+      conda: conda.yaml
+      virtualenv: python_env.yaml
+    loader_module: mlflow.sklearn
+    model_path: model.pkl
+    predict_fn: predict
+    python_version: 3.13.1
+  sklearn:
+    code: null
+    pickled_model: model.pkl
+    serialization_format: cloudpickle
+    sklearn_version: 1.6.1
+is_signature_from_type_hint: false
+mlflow_version: 3.6.0
+model_id: m-7141da981ec34f009930e67949345b9c
+model_size_bytes: 1889803
+model_uuid: m-7141da981ec34f009930e67949345b9c
+prompts: null
+run_id: b372ef98edc14b169feb4764afaadfee
+signature:
+  inputs: '[{"type": "integer", "name": "group_id", "required": true}, {"type": "double",
+    "name": "lag_1", "required": true}, {"type": "double", "name": "lag_7", "required":
+    true}, {"type": "double", "name": "rolling_mean_7", "required": true}, {"type":
+    "double", "name": "rolling_std_7", "required": true}, {"type": "integer", "name":
+    "day", "required": true}, {"type": "integer", "name": "month", "required": true},
+    {"type": "integer", "name": "year", "required": true}, {"type": "integer", "name":
+    "weekday", "required": true}, {"type": "long", "name": "weekofyear", "required":
+    true}, {"type": "long", "name": "is_weekend", "required": true}]'
+  outputs: '[{"type": "tensor", "tensor-spec": {"dtype": "float64", "shape": [-1]}}]'
+  params: null
+type_hint_from_example: false
+utc_time_created: '2026-05-21 14:33:26.244448'
