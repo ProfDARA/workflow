@@ -13,6 +13,9 @@ jobs:
     env:
       DOCKERHUB_USER: ${{ secrets.DOCKER_HUB_USERNAME || secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN || secrets.DOCKERHUB_TOKEN }}
+      DAGSHUB_USERNAME: ${{ secrets.DAGSHUB_USERNAME }}
+      DAGSHUB_TOKEN: ${{ secrets.DAGSHUB_TOKEN }}
+      DAGSHUB_REPO: ${{ secrets.DAGSHUB_REPO }}
     steps:
     - name: Checkout repository
       uses: actions/checkout@v3
@@ -48,16 +51,35 @@ jobs:
           MLRUNS_DIR="MLProject/mlruns/0"
         fi
 
-        RUN_ID=$(basename "$(ls -td "$MLRUNS_DIR"/*/ | head -n 1)")
+        RUN_ID=$(for d in "$MLRUNS_DIR"/*; do
+          [ -d "$d" ] || continue
+          name=$(basename "$d")
+          if [[ "$name" =~ ^[0-9a-f]{32}$ ]] && [ -d "$d/artifacts" ]; then
+            echo "$d"
+          fi
+        done | xargs -r ls -td | head -n 1 | xargs -r basename)
+
+        if [ -z "$RUN_ID" ]; then
+          echo "No valid MLflow run directory found under $MLRUNS_DIR"
+          exit 1
+        fi
+
+        ARTIFACT_SOURCE="$MLRUNS_DIR/$RUN_ID/artifacts"
+        if [ ! -d "$ARTIFACT_SOURCE" ]; then
+          echo "Artifact directory not found: $ARTIFACT_SOURCE"
+          exit 1
+        fi
+
         echo "MLRUNS_DIR=$MLRUNS_DIR" >> $GITHUB_ENV
         echo "RUN_ID=$RUN_ID" >> $GITHUB_ENV
+        echo "ARTIFACT_SOURCE=$ARTIFACT_SOURCE" >> $GITHUB_ENV
         echo "Latest run_id: $RUN_ID"
 
     - name: Upload to GitHub LFS
       run: |
         ARTIFACT_DIR="ci_artifacts/mlproject/$RUN_ID"
         mkdir -p "$ARTIFACT_DIR"
-        cp -r "$MLRUNS_DIR/$RUN_ID/artifacts/." "$ARTIFACT_DIR/"
+        cp -r "$ARTIFACT_SOURCE/." "$ARTIFACT_DIR/"
 
         git lfs install --local
         git lfs track "ci_artifacts/**/*.pkl" "ci_artifacts/**/*.joblib" "ci_artifacts/**/*.onnx" "ci_artifacts/**/*.h5" "ci_artifacts/**/*.keras" "ci_artifacts/**/*.pt" "ci_artifacts/**/*.pth" "ci_artifacts/**/*.csv" "ci_artifacts/**/*.parquet"
@@ -66,6 +88,26 @@ jobs:
         git add .gitattributes ci_artifacts/
         git commit -m "Upload artifact to GitHub LFS [skip ci]" || echo "No changes to commit"
         git push origin main
+
+    - name: Upload same artifacts to DagsHub LFS
+      if: ${{ env.DAGSHUB_USERNAME != '' && env.DAGSHUB_TOKEN != '' && env.DAGSHUB_REPO != '' }}
+      run: |
+        ARTIFACT_DIR="ci_artifacts/mlproject/$RUN_ID"
+        DAGSHUB_URL="https://${DAGSHUB_USERNAME}:${DAGSHUB_TOKEN}@dagshub.com/${DAGSHUB_REPO}.git"
+        WORKDIR=$(mktemp -d)
+
+        git clone --depth 1 "$DAGSHUB_URL" "$WORKDIR"
+        mkdir -p "$WORKDIR/$ARTIFACT_DIR"
+        cp -r "$ARTIFACT_DIR/." "$WORKDIR/$ARTIFACT_DIR/"
+
+        cd "$WORKDIR"
+        git lfs install --local
+        git lfs track "ci_artifacts/**/*.pkl" "ci_artifacts/**/*.joblib" "ci_artifacts/**/*.onnx" "ci_artifacts/**/*.h5" "ci_artifacts/**/*.keras" "ci_artifacts/**/*.pt" "ci_artifacts/**/*.pth" "ci_artifacts/**/*.csv" "ci_artifacts/**/*.parquet"
+        git config user.name "github-actions[bot]"
+        git config user.email "github-actions[bot]@users.noreply.github.com"
+        git add .gitattributes ci_artifacts/
+        git commit -m "Sync MLflow artifacts from GitHub Actions [skip ci]" || echo "No changes to commit"
+        git push origin HEAD:main
 
     - name: Build Docker Model
       run: |
