@@ -10,18 +10,19 @@ Repository ini berisi implementasi **MLflow Project + GitHub Actions CI** untuk 
 - `MLProject/MLproject` adalah definisi entry point MLflow.
 - `MLProject/namadataset_preprocessing/` berisi dataset input yang dipakai saat training.
 - `.github/workflows/ci.yml` adalah workflow GitHub Actions untuk menjalankan MLflow Project.
-- `ci_artifacts/` akan berisi artifact hasil CI yang dikomit oleh workflow.
+- `ci_artifacts/` akan berisi artifact hasil CI yang dikomit ke GitHub oleh workflow.
 
 ## Alur kerja
 
 Saat ada `push` ke branch `main` atau workflow dijalankan manual, GitHub Actions akan:
 
-1. Menyiapkan environment conda dari `MLProject/conda.yaml`.
-2. Menjalankan `mlflow run` pada folder `MLProject` (demand forecasting).
-3. Menyimpan artifact hasil training.
-4. Mengambil run MLflow terbaru.
-5. Membuat Docker image dari model dengan `mlflow models build-docker`.
-6. Push image ke Docker Hub.
+1. Menyiapkan Python environment dan memeriksa environment runner.
+2. Meng-install dependensi MLflow dan library training.
+3. Menjalankan `mlflow run` pada folder `MLProject` (demand forecasting).
+4. Mengambil `run_id` MLflow terbaru.
+5. Menyalin artifact run ke `ci_artifacts/mlproject/<run_id>/` lalu meng-commit ke GitHub.
+6. Membuat Docker image dari model dengan `mlflow models build-docker`.
+7. Push image ke Docker Hub.
 
 ## Cara pakai lokal
 
@@ -71,8 +72,7 @@ Workflow akan jalan otomatis saat ada push ke `main`, atau bisa dijalankan manua
 ## Cara cek berhasil
 
 - Workflow status di GitHub Actions harus sukses.
-- Artifact `mlproject-artifacts` harus muncul di hasil run.
-- Folder `ci_artifacts/mlproject/` harus terisi jika workflow melakukan commit artifact.
+- Folder `ci_artifacts/mlproject/<run_id>/` harus terisi jika workflow melakukan commit artifact.
 - Docker Hub harus punya image dengan nama `DOCKERHUB_USERNAME/mlproject-model`.
 
 ## Catatan
