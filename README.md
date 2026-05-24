@@ -83,6 +83,23 @@ Workflow akan jalan otomatis saat ada push ke `main`, atau bisa dijalankan manua
 - Jika secrets DagsHub diisi, artifact yang sama juga harus muncul di repo DagsHub.
 - Docker Hub harus punya image dengan nama `DOCKERHUB_USERNAME/mlproject-model`.
 
+## Cara serve dari Docker Hub
+
+Kalau image CI sudah ter-push, model bisa langsung dijalankan dari image Docker Hub tanpa perlu build lokal lagi. Untuk repo ini, image yang dipakai adalah `profdara/mlproject-model:latest`.
+
+```bash
+docker pull profdara/mlproject-model:latest
+docker run --rm -p 5001:8080 profdara/mlproject-model:latest
+```
+
+Setelah container aktif, cek service dengan:
+
+```bash
+curl http://localhost:5001/ping
+```
+
+Dan lakukan prediksi ke endpoint MLflow `/invocations` dengan payload yang mengikuti schema model hasil training CI.
+
 ## Catatan
 
 Kalau workflow gagal di langkah setup environment, cek file [MLProject/conda.yaml](MLProject/conda.yaml) dan pastikan dependency tidak bentrok.
