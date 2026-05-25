@@ -139,7 +139,7 @@ jobs:
 
     - name: Build Docker Model
       run: |
-        mlflow models build-docker --model-uri "models:/$MODEL_ID" --name "mlproject-model" --env-manager local
+        mlflow models build-docker --model-uri "file://$GITHUB_WORKSPACE/$MODELS_DIR/$MODEL_ID/artifacts" --name "mlproject-model" --env-manager local
 
     - name: Log in to Docker Hub
       uses: docker/login-action@v2
