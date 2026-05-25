@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 from contextlib import nullcontext
 import math
+import os
 import traceback
 from pathlib import Path
 
@@ -268,13 +269,19 @@ def train_evaluate(df: pd.DataFrame, random_state: int = 42, output_dir: Path = 
     except Exception as exc:
         raise RuntimeError('MLflow import failed; cannot continue CI model packaging flow.') from exc
 
+    project_run_id = os.getenv('MLFLOW_RUN_ID', '').strip()
     active_run = mlflow.active_run()
-    if active_run is None:
-        mlflow.set_experiment('demand_forecasting')
-        run_context = mlflow.start_run()
-    else:
+
+    if active_run is not None:
         print(f"NOTE: Using active MLflow run from project execution: {active_run.info.run_id}")
         run_context = nullcontext(active_run)
+    elif project_run_id:
+        # When invoked by `mlflow run`, reuse the run created by MLflow Projects.
+        print(f'NOTE: Attaching to MLflow project run id from env: {project_run_id}')
+        run_context = mlflow.start_run(run_id=project_run_id)
+    else:
+        mlflow.set_experiment('demand_forecasting')
+        run_context = mlflow.start_run()
 
     with run_context:
         mlflow.log_params({'model': 'RandomForestRegressor', 'n_estimators': 100, 'max_depth': 10})
