@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import math
+import traceback
 from pathlib import Path
 
 import joblib
@@ -263,30 +264,44 @@ def train_evaluate(df: pd.DataFrame, random_state: int = 42, output_dir: Path = 
 
     try:
         import mlflow
+    except Exception as exc:
+        raise RuntimeError('MLflow import failed; cannot continue CI model packaging flow.') from exc
 
-        mlflow.set_experiment('demand_forecasting')
-        with mlflow.start_run():
-            mlflow.log_params({'model': 'RandomForestRegressor', 'n_estimators': 100, 'max_depth': 10})
-            mlflow.log_metrics({
-                'val_mae': float(val_metrics['mae']),
-                'val_rmse': float(val_metrics['rmse']),
-                'val_r2': float(val_metrics['r2']),
-                'test_mae': float(test_metrics['mae']),
-                'test_rmse': float(test_metrics['rmse']),
-                'test_r2': float(test_metrics['r2']),
-                'baseline_val_rmse': float(baseline_val_metrics['rmse']),
-                'baseline_test_rmse': float(baseline_test_metrics['rmse']),
-            })
+    mlflow.set_experiment('demand_forecasting')
+    with mlflow.start_run():
+        mlflow.log_params({'model': 'RandomForestRegressor', 'n_estimators': 100, 'max_depth': 10})
+        mlflow.log_metrics({
+            'val_mae': float(val_metrics['mae']),
+            'val_rmse': float(val_metrics['rmse']),
+            'val_r2': float(val_metrics['r2']),
+            'test_mae': float(test_metrics['mae']),
+            'test_rmse': float(test_metrics['rmse']),
+            'test_r2': float(test_metrics['r2']),
+            'baseline_val_rmse': float(baseline_val_metrics['rmse']),
+            'baseline_test_rmse': float(baseline_test_metrics['rmse']),
+        })
+
+        # Some MLflow combinations can reject pip_requirements; fallback keeps logging unblocked.
+        try:
             mlflow_sklearn.log_model(
                 model,
                 'model',
                 pip_requirements=SERVING_REQUIREMENTS,
             )
-            if feature_csv is not None:
-                mlflow.log_artifact(str(feature_csv))
-        print('Logged run to MLflow')
-    except Exception:
-        print('MLflow not available or failed to log - skipping MLflow step')
+        except TypeError:
+            print('NOTE: log_model pip_requirements not supported in this MLflow build, using default env.')
+            mlflow_sklearn.log_model(model, 'model')
+        except Exception:
+            print('ERROR: Failed to log model with pinned requirements. Traceback:')
+            traceback.print_exc()
+            print('Retrying log_model without pinned requirements as compatibility fallback...')
+            mlflow_sklearn.log_model(model, 'model')
+
+        if feature_csv is not None:
+            mlflow.log_artifact(str(feature_csv))
+
+        print(f"MLflow model artifact URI: {mlflow.get_artifact_uri('model')}")
+    print('Logged run to MLflow')
 
 
 def main():
