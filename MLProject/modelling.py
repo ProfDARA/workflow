@@ -8,6 +8,7 @@ baseline, and exports feature importance as CSV.
 from __future__ import annotations
 
 import argparse
+from contextlib import nullcontext
 import math
 import traceback
 from pathlib import Path
@@ -267,8 +268,15 @@ def train_evaluate(df: pd.DataFrame, random_state: int = 42, output_dir: Path = 
     except Exception as exc:
         raise RuntimeError('MLflow import failed; cannot continue CI model packaging flow.') from exc
 
-    mlflow.set_experiment('demand_forecasting')
-    with mlflow.start_run():
+    active_run = mlflow.active_run()
+    if active_run is None:
+        mlflow.set_experiment('demand_forecasting')
+        run_context = mlflow.start_run()
+    else:
+        print(f"NOTE: Using active MLflow run from project execution: {active_run.info.run_id}")
+        run_context = nullcontext(active_run)
+
+    with run_context:
         mlflow.log_params({'model': 'RandomForestRegressor', 'n_estimators': 100, 'max_depth': 10})
         mlflow.log_metrics({
             'val_mae': float(val_metrics['mae']),
