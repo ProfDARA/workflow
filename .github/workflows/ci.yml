@@ -43,31 +43,36 @@ jobs:
       run: |
         export MLFLOW_TRACKING_URI="file://$GITHUB_WORKSPACE/ci_mlruns"
         mkdir -p "$GITHUB_WORKSPACE/ci_mlruns"
-        mlflow run MLProject --env-manager=local -P data=auto -P output=artifacts -P group_col=global -P target_col=Daily_Revenue
+        echo "MLFLOW_TRACKING_URI=$MLFLOW_TRACKING_URI" >> $GITHUB_ENV
+        mlflow run MLProject --env-manager=local --experiment-name demand_forecasting_ci -P data=auto -P output=artifacts -P group_col=global -P target_col=Daily_Revenue
 
     - name: Get latest MLflow run_id
       run: |
-        if [ -d "ci_mlruns/0" ]; then
-          MLRUNS_DIR="ci_mlruns/0"
+        if [ -d "ci_mlruns" ]; then
+          MLRUNS_DIR="ci_mlruns"
         else
-          echo "CI tracking directory not found: ci_mlruns/0"
+          echo "CI tracking directory not found: ci_mlruns"
           exit 1
         fi
 
-        RUN_ID=$(for d in "$MLRUNS_DIR"/*; do
+        RUN_PATH=$(for d in "$MLRUNS_DIR"/*/*; do
           [ -d "$d" ] || continue
-          name=$(basename "$d")
-          if [[ "$name" =~ ^[0-9a-f]{32}$ ]] && [ -d "$d/artifacts" ]; then
+          exp_id=$(basename "$(dirname "$d")")
+          run_id=$(basename "$d")
+          if [[ "$exp_id" =~ ^[0-9]+$ ]] && [[ "$run_id" =~ ^[0-9a-f]{32}$ ]] && [ -d "$d/artifacts" ]; then
             echo "$d"
           fi
-        done | xargs -r ls -td | head -n 1 | xargs -r basename)
+        done | xargs -r ls -td | head -n 1)
+
+        RUN_ID=$(basename "$RUN_PATH")
 
         if [ -z "$RUN_ID" ]; then
           echo "No valid MLflow run directory found under $MLRUNS_DIR"
           exit 1
         fi
 
-        ARTIFACT_SOURCE="$MLRUNS_DIR/$RUN_ID/artifacts"
+        ARTIFACT_SOURCE="$RUN_PATH/artifacts"
+        MODEL_URI="runs:/$RUN_ID/model"
         if [ ! -d "$ARTIFACT_SOURCE" ]; then
           echo "Artifact directory not found: $ARTIFACT_SOURCE"
           exit 1
@@ -75,35 +80,9 @@ jobs:
 
         echo "MLRUNS_DIR=$MLRUNS_DIR" >> $GITHUB_ENV
         echo "RUN_ID=$RUN_ID" >> $GITHUB_ENV
+        echo "MODEL_URI=$MODEL_URI" >> $GITHUB_ENV
         echo "ARTIFACT_SOURCE=$ARTIFACT_SOURCE" >> $GITHUB_ENV
         echo "Latest run_id: $RUN_ID"
-
-    - name: Get latest MLflow model_id
-      run: |
-        if [ -d "$MLRUNS_DIR/models" ]; then
-          MODELS_DIR="$MLRUNS_DIR/models"
-        else
-          echo "CI model directory not found under $MLRUNS_DIR/models"
-          exit 1
-        fi
-
-        MODEL_ID=$(for d in "$MODELS_DIR"/*; do
-          [ -d "$d" ] || continue
-          name=$(basename "$d")
-          if [[ "$name" =~ ^m-[0-9a-f]{32}$ ]] && [ -f "$d/meta.yaml" ]; then
-            updated=$(grep -E '^last_updated_timestamp:' "$d/meta.yaml" | awk '{print $2}')
-            printf '%s %s\n' "${updated:-0}" "$name"
-          fi
-        done | sort -nr | head -n 1 | awk '{print $2}')
-
-        if [ -z "$MODEL_ID" ]; then
-          echo "No valid MLflow model directory found under $MODELS_DIR"
-          exit 1
-        fi
-
-        echo "MODELS_DIR=$MODELS_DIR" >> $GITHUB_ENV
-        echo "MODEL_ID=$MODEL_ID" >> $GITHUB_ENV
-        echo "Latest model_id: $MODEL_ID"
 
     - name: Upload to GitHub LFS
       run: |
@@ -141,7 +120,7 @@ jobs:
 
     - name: Build Docker Model
       run: |
-        mlflow models build-docker --model-uri "file://$GITHUB_WORKSPACE/$MODELS_DIR/$MODEL_ID/artifacts" --name "mlproject-model" --env-manager local
+        mlflow models build-docker --model-uri "$MODEL_URI" --name "mlproject-model" --env-manager local
 
     - name: Log in to Docker Hub
       uses: docker/login-action@v2
