@@ -1,14 +1,17 @@
-"""
-Simple modelling pipeline for demand forecasting.
-Reads `amazon_preprocessing/daily_demand_forecasting.csv`, builds per-category time series,
-trains a RandomForestRegressor, evaluates against a naive baseline, and exports feature
-importance as CSV.
+"""Simple modelling pipeline for demand forecasting.
+
+Reads ``amazon_preprocessing/daily_demand_forecasting.csv``, builds per-category
+time series, trains a RandomForestRegressor, evaluates against a naive
+baseline, and exports feature importance as CSV.
 """
 
-from pathlib import Path
-import joblib
+from __future__ import annotations
+
+import argparse
 import math
+from pathlib import Path
 
+import joblib
 import pandas as pd
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
@@ -25,6 +28,12 @@ FEATURE_COLUMNS = [
 
 DATA_PATH = Path(__file__).resolve().parent / 'amazon_preprocessing' / 'daily_demand_forecasting.csv'
 MODEL_OUTPUT = Path(__file__).resolve().parent / 'models'
+DATASET_CANDIDATES = [
+    DATA_PATH,
+    Path(__file__).resolve().parent / 'amazon_preprocessing' / 'cleaned_amazon_sales.csv',
+    Path(__file__).resolve().parent / 'amazon_preprocessing' / 'daily_demand_by_sku.csv',
+    Path(__file__).resolve().parent / 'amazon_preprocessing' / 'daily_demand_by_state.csv',
+]
 TRAINING_DISTRIBUTION_COLUMNS = [
     'category_encoded',
     'lag_1', 'lag_7',
@@ -33,22 +42,66 @@ TRAINING_DISTRIBUTION_COLUMNS = [
 ]
 
 
-def load_data(path: Path = DATA_PATH) -> pd.DataFrame:
-    if not path.exists():
-        raise FileNotFoundError(f'Forecasting dataset not found: {path}')
-    return pd.read_csv(path)
+def load_data(path: Path | str = DATA_PATH) -> pd.DataFrame:
+    if isinstance(path, str) and path.strip().lower() in {'', 'auto', 'default', 'any'}:
+        path = DATA_PATH
+
+    candidate_paths: list[Path] = []
+    explicit_path = Path(path)
+    if explicit_path.exists() and explicit_path.is_file():
+        candidate_paths.append(explicit_path)
+
+    for candidate in DATASET_CANDIDATES:
+        if candidate not in candidate_paths:
+            candidate_paths.append(candidate)
+
+    for candidate in candidate_paths:
+        if not candidate.exists() or not candidate.is_file():
+            continue
+
+        try:
+            header = pd.read_csv(candidate, nrows=0)
+        except Exception:
+            continue
+
+        columns = {column.strip() for column in header.columns}
+        has_date = 'Date' in columns
+        has_category = 'Category' in columns or 'Category_encoded' in columns
+        has_target = 'Daily_Demand' in columns or 'Qty' in columns
+        if has_date and has_category and has_target:
+            if candidate != explicit_path:
+                print(f'NOTE: Using fallback dataset {candidate}')
+            return pd.read_csv(candidate)
+
+    raise FileNotFoundError(
+        'Forecasting dataset not found with required columns. Expected a CSV containing Date, Category, and Daily_Demand or Qty.'
+    )
 
 
 def _prepare_category_daily_demand(df: pd.DataFrame) -> pd.DataFrame:
-    if 'Date' not in df.columns or 'Daily_Demand' not in df.columns:
-        raise KeyError("Columns 'Date' and 'Daily_Demand' are required in the forecasting dataset.")
-    if 'Category' not in df.columns:
-        raise KeyError("Column 'Category' is required for per-category forecasting.")
+    date_column = 'Date' if 'Date' in df.columns else None
+    if date_column is None:
+        raise KeyError("Column 'Date' is required in the forecasting dataset.")
+
+    if 'Category' in df.columns:
+        category_column = 'Category'
+    elif 'Category_encoded' in df.columns:
+        category_column = 'Category_encoded'
+    else:
+        raise KeyError("Column 'Category' or 'Category_encoded' is required for per-category forecasting.")
+
+    if 'Daily_Demand' in df.columns:
+        target_column = 'Daily_Demand'
+    elif 'Qty' in df.columns:
+        target_column = 'Qty'
+        print("NOTE: Using 'Qty' as the demand target because 'Daily_Demand' is not available.")
+    else:
+        raise KeyError("Column 'Daily_Demand' or 'Qty' is required in the forecasting dataset.")
 
     prepared = df.copy()
-    prepared['Date'] = pd.to_datetime(prepared['Date'], errors='coerce')
-    prepared['Daily_Demand'] = pd.to_numeric(prepared['Daily_Demand'], errors='coerce')
-    prepared['Category'] = prepared['Category'].astype(str).str.strip()
+    prepared['Date'] = pd.to_datetime(prepared[date_column], errors='coerce')
+    prepared['Daily_Demand'] = pd.to_numeric(prepared[target_column], errors='coerce')
+    prepared['Category'] = prepared[category_column].astype(str).str.strip()
     prepared = prepared.dropna(subset=['Date', 'Daily_Demand', 'Category'])
     prepared = prepared[prepared['Category'] != '']
 
@@ -150,11 +203,11 @@ def _validate_formulation(df: pd.DataFrame):
     if 'Category' not in df.columns:
         raise KeyError("Column 'Category' is required for per-category forecasting.")
 
-    if 'Category' in df.columns and df['Category'].nunique(dropna=True) <= 1:
+    if df['Category'].nunique(dropna=True) <= 1:
         print('NOTE: Only one category detected. Per-category setup still works, but category signal is limited.')
 
 
-def train_evaluate(df: pd.DataFrame, random_state: int = 42):
+def train_evaluate(df: pd.DataFrame, random_state: int = 42, output_dir: Path = MODEL_OUTPUT):
     daily_df = _prepare_category_daily_demand(df)
     daily_df = _add_time_series_features(daily_df)
 
@@ -194,7 +247,7 @@ def train_evaluate(df: pd.DataFrame, random_state: int = 42):
     if test_metrics['rmse'] > baseline_test_metrics['rmse']:
         print('WARNING: RandomForest is worse than the naive baseline on the test split.')
 
-    out_dir = MODEL_OUTPUT
+    out_dir = Path(output_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     joblib.dump(model, out_dir / 'rf_model.joblib')
     feature_csv = _export_feature_importance(model, FEATURE_COLUMNS, out_dir)
@@ -226,6 +279,20 @@ def train_evaluate(df: pd.DataFrame, random_state: int = 42):
         print('MLflow not available or failed to log - skipping MLflow step')
 
 
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--data', default='auto')
+    parser.add_argument('--output', default='artifacts')
+    parser.add_argument('--group-col', default='Category')
+    parser.add_argument('--group-value', nargs='?', const='', default='')
+    parser.add_argument('--target-col', default='Daily_Demand')
+    parser.add_argument('--min-group-size', type=int, default=30)
+    parser.add_argument('--random-state', type=int, default=42)
+    args = parser.parse_args()
+
+    df = load_data(args.data)
+    train_evaluate(df, random_state=args.random_state, output_dir=Path(args.output))
+
+
 if __name__ == '__main__':
-    df = load_data()
-    train_evaluate(df)
+    main()
