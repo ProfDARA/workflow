@@ -75,6 +75,34 @@ jobs:
         echo "ARTIFACT_SOURCE=$ARTIFACT_SOURCE" >> $GITHUB_ENV
         echo "Latest run_id: $RUN_ID"
 
+    - name: Get latest MLflow model_id
+      run: |
+        if [ -d "$MLRUNS_DIR/models" ]; then
+          MODELS_DIR="$MLRUNS_DIR/models"
+        elif [ -d "mlruns/0/models" ]; then
+          MODELS_DIR="mlruns/0/models"
+        else
+          MODELS_DIR="MLProject/mlruns/0/models"
+        fi
+
+        MODEL_ID=$(for d in "$MODELS_DIR"/*; do
+          [ -d "$d" ] || continue
+          name=$(basename "$d")
+          if [[ "$name" =~ ^m-[0-9a-f]{32}$ ]] && [ -f "$d/meta.yaml" ]; then
+            updated=$(grep -E '^last_updated_timestamp:' "$d/meta.yaml" | awk '{print $2}')
+            printf '%s %s\n' "${updated:-0}" "$name"
+          fi
+        done | sort -nr | head -n 1 | awk '{print $2}')
+
+        if [ -z "$MODEL_ID" ]; then
+          echo "No valid MLflow model directory found under $MODELS_DIR"
+          exit 1
+        fi
+
+        echo "MODELS_DIR=$MODELS_DIR" >> $GITHUB_ENV
+        echo "MODEL_ID=$MODEL_ID" >> $GITHUB_ENV
+        echo "Latest model_id: $MODEL_ID"
+
     - name: Upload to GitHub LFS
       run: |
         ARTIFACT_DIR="ci_artifacts/mlproject/$RUN_ID"
@@ -111,7 +139,7 @@ jobs:
 
     - name: Build Docker Model
       run: |
-        mlflow models build-docker --model-uri "runs:/$RUN_ID/model" --name "mlproject-model" --env-manager local
+        mlflow models build-docker --model-uri "models:/$MODEL_ID" --name "mlproject-model" --env-manager local
 
     - name: Log in to Docker Hub
       uses: docker/login-action@v2
