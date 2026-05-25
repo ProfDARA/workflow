@@ -18,6 +18,12 @@ from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 from sklearn.preprocessing import LabelEncoder
 from mlflow import sklearn as mlflow_sklearn
 
+SERVING_REQUIREMENTS = [
+    'mlflow==2.22.2',
+    'fastapi==0.109.2',
+    'uvicorn==0.29.0',
+]
+
 
 FEATURE_COLUMNS = [
     'category_encoded',
@@ -271,7 +277,11 @@ def train_evaluate(df: pd.DataFrame, random_state: int = 42, output_dir: Path = 
                 'baseline_val_rmse': float(baseline_val_metrics['rmse']),
                 'baseline_test_rmse': float(baseline_test_metrics['rmse']),
             })
-            mlflow_sklearn.log_model(model, 'model')
+            mlflow_sklearn.log_model(
+                model,
+                'model',
+                pip_requirements=SERVING_REQUIREMENTS,
+            )
             if feature_csv is not None:
                 mlflow.log_artifact(str(feature_csv))
         print('Logged run to MLflow')
