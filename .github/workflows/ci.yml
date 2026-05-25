@@ -45,10 +45,10 @@ jobs:
 
     - name: Get latest MLflow run_id
       run: |
-        if [ -d "mlruns/0" ]; then
-          MLRUNS_DIR="mlruns/0"
-        else
+        if [ -d "MLProject/mlruns/0" ]; then
           MLRUNS_DIR="MLProject/mlruns/0"
+        elif [ -d "mlruns/0" ]; then
+          MLRUNS_DIR="mlruns/0"
         fi
 
         RUN_ID=$(for d in "$MLRUNS_DIR"/*; do
@@ -77,12 +77,12 @@ jobs:
 
     - name: Get latest MLflow model_id
       run: |
-        if [ -d "$MLRUNS_DIR/models" ]; then
-          MODELS_DIR="$MLRUNS_DIR/models"
+        if [ -d "MLProject/mlruns/0/models" ]; then
+          MODELS_DIR="MLProject/mlruns/0/models"
         elif [ -d "mlruns/0/models" ]; then
           MODELS_DIR="mlruns/0/models"
-        else
-          MODELS_DIR="MLProject/mlruns/0/models"
+        elif [ -d "$MLRUNS_DIR/models" ]; then
+          MODELS_DIR="$MLRUNS_DIR/models"
         fi
 
         MODEL_ID=$(for d in "$MODELS_DIR"/*; do
