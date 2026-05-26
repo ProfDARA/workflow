@@ -1,0 +1,10 @@
+channels:
+- conda-forge
+dependencies:
+- python=3.11.15
+- pip<=26.1.1
+- pip:
+  - mlflow==2.22.2
+  - fastapi==0.109.2
+  - uvicorn==0.29.0
+name: mlflow-env

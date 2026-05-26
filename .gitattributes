@@ -1,7 +1,6 @@
 # Large tabular data
 *.csv filter=lfs diff=lfs merge=lfs -text
 *.parquet filter=lfs diff=lfs merge=lfs -text
-
 # Model artifacts
 *.pkl filter=lfs diff=lfs merge=lfs -text
 *.joblib filter=lfs diff=lfs merge=lfs -text
@@ -10,7 +9,6 @@
 *.keras filter=lfs diff=lfs merge=lfs -text
 *.pt filter=lfs diff=lfs merge=lfs -text
 *.pth filter=lfs diff=lfs merge=lfs -text
-
 # CI artifacts and MLflow outputs
 ci_artifacts/**/*.pkl filter=lfs diff=lfs merge=lfs -text
 ci_artifacts/**/*.joblib filter=lfs diff=lfs merge=lfs -text
@@ -19,3 +17,5 @@ ci_artifacts/**/*.h5 filter=lfs diff=lfs merge=lfs -text
 ci_artifacts/**/*.keras filter=lfs diff=lfs merge=lfs -text
 ci_artifacts/**/*.pt filter=lfs diff=lfs merge=lfs -text
 ci_artifacts/**/*.pth filter=lfs diff=lfs merge=lfs -text
+ci_artifacts/**/*.csv filter=lfs diff=lfs merge=lfs -text
+ci_artifacts/**/*.parquet filter=lfs diff=lfs merge=lfs -text
